@@ -1,0 +1,19 @@
+#!/bin/bash 
+#PBS -N Batch_Cutout
+#PBS -o /home/connor.bottrell/Scratch/pbs
+#PBS -e /home/connor.bottrell/Scratch/pbs
+#PBS -l select=1:ncpus=1:mem=512mb
+#PBS -l walltime=12:00:00
+#PBS -J 0-3:1
+#PBS -u bottrell
+#PBS -M connor.bottrell@ipmu.jp
+#PBS -m ae
+#PBS -V
+#PBS -q tiny
+
+source ~/.bash_profile
+conda activate tf39_cpu
+cd /lustre/work/connor.bottrell/RealSim_HSC
+export JOB_ARRAY_INDEX=$PBS_ARRAY_INDEX
+export NAOJ_TASK_LIMIT=4
+python batch_cutout.py
