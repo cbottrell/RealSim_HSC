@@ -1,4 +1,4 @@
-import os,sys,requests
+import os,sys,time,requests
 import tarfile,tempfile
 
 def make_cutout_list(object_id,ra,dec,tmp_dir,dr='dr3',rerun='s20a_wide',
