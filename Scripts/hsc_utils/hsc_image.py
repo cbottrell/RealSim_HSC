@@ -2,14 +2,14 @@ import os,sys,time,requests
 import tarfile,tempfile
 
 def make_cutout_list(object_id,ra,dec,tmp_dir,dr='dr3',rerun='s20a_wide',
-                     filters='GRIZY',fov_arcsec=30, mask=True, variance=True):
+                     filters='GRIZY',fov_arcsec=30, mask='true', variance='true'):
     '''
     Generate cutout list for a single object_id,ra,dec with formatting described here:
     https://hscdata.mtk.nao.ac.jp/das_quarry/dr3/manual.html#list-to-upload
     
     Filters must be a single string of capitalized filter names (default 'GRIZY').
     fov_arcec is the full-width size of the desired cutouts.
-    mask and variance images are included by default.
+    mask and variance images are lower-case strings ('true'/'false')
     tmp_dir is the location of the output cutout list (txt file).
     '''
     
@@ -18,6 +18,10 @@ def make_cutout_list(object_id,ra,dec,tmp_dir,dr='dr3',rerun='s20a_wide',
     for filt in filters:
         row = f" {rerun} HSC-{filt} {ra} {dec} {fov_arcsec/2}asec {fov_arcsec/2}asec true {mask} {variance} coadd # {object_id}"
         das_list.append(row)
+    
+    print(das_header)
+    for row in das_list:
+        print(row)
 
     cutout_list = f"{tmp_dir}/{object_id}_list.txt"
     with open(cutout_list, "w") as f:
@@ -65,7 +69,7 @@ def download_cutouts(cutout_list,dr,rerun,tmp_dir):
         
                 
 def get_cutouts(object_id,ra,dec,out_dir,dr='dr3',rerun='s20a_wide',
-                filters='GRIZY',fov_arcsec=30, mask=True, variance=True):
+                filters='GRIZY',fov_arcsec=30,mask='true',variance='true'):
     '''
     Get cutouts of size fov_arcsec [arcsec] in filters for a given ra,dec. 
     object_id is arbitrary and only used for naming.
