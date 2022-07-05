@@ -287,7 +287,7 @@ def main():
     csv_name = 'Catalogues/HSC-dr3-s20a_wide-photoz_mizuki-CLEAN.csv'
     csv_name = f'{rsdir}/{csv_name}'
     src_cat = hsc_sql.load_sql_df(csv_name)
-
+    
     for sub in subs[job_idx::njobs]:
         for cam in cams:
             print(f'Running HSC RealSim for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}...')
@@ -298,7 +298,10 @@ def main():
                 print('Failed for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}.')
                 pass
             print(f'Fulltime: {time.time()-start} seconds.\n')
-        
+    
+    #snap,sub,cam = 78,636086,'v2'
+    #realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,verbose=True)
+
 if __name__=='__main__':
     
     main()
