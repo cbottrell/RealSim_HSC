@@ -58,15 +58,15 @@ def hsc_calibrate_variance_nanomaggies(filename,pixelscale=0.168,extension=3):
     variance = variance*(1e9/f0)**2 # nanomaggies
     return variance   
 
-def coord_mask(filename,keys=['MP_BAD', 'MP_BRIGHT_OBJECT', 'MP_CLIPPED', 'MP_CR', 'MP_CROSSTALK',
-                              'MP_DETECTED', 'MP_DETECTED_NEGATIVE', 'MP_EDGE', 'MP_INEXACT_PSF', 
-                              'MP_INTRP', 'MP_NOT_DEBLENDED', 'MP_NO_DATA', 'MP_REJECTED', 
-                              'MP_SAT', 'MP_SENSOR_EDGE', 'MP_SUSPECT', 'MP_UNMASKEDNAN']):
+def coord_mask(filename,
+               keys=['MP_BAD', 'MP_BRIGHT_OBJECT', 'MP_CLIPPED', 'MP_CR',
+                     'MP_CROSSTALK', 'MP_DETECTED', 'MP_DETECTED_NEGATIVE',
+                     'MP_EDGE', 'MP_INEXACT_PSF', 'MP_INTRP', 
+                     'MP_NOT_DEBLENDED', 'MP_NO_DATA', 'MP_REJECTED', 
+                     'MP_SAT', 'MP_SENSOR_EDGE', 'MP_SUSPECT', 
+                     'MP_UNMASKEDNAN']):
     '''
-    Coordinate mask for insertions. Assumes that the mask is the 2nd hdu object.
-    Use all flags by default (i.e. only pixels with no flags are used for insertions).
-    Bright object flags are very conservative and so are omitted. One should recall, however,
-    that these flags will only necessarily apply to the pixel at the center of the insertion.
+    Coordinate mask for insertions. Assumes that the mask is the 2nd hdu object. Use all flags by default (i.e. only pixels with no flags are used for insertions). Bright object flags are very conservative and so are omitted. One should recall, however,that these flags will only necessarily apply to the pixel at the center of the insertion.
     '''
     mask_hdr = fits.getheader(filename,2)
     mask_dat = fits.getdata(filename,2).astype(np.uint32)
@@ -97,10 +97,16 @@ def get_insertion_coords(mask,npixels_hsc):
     index = np.random.choice(int(np.sum(mask)))
     # coordinates of injection site 
     return np.argwhere(mask)[index]
-    
+
+def psf_jitter(ra,dec,jitter_arcsec=3.):
+    '''Introduce jitter in PSF reconstruction position to avoid perfect PSF reconstruction with respect to those used to create synthetic images.'''
+    jitter_deg = jitter_arcsec / 3600.
+    ra += np.random.randn()*jitter_deg
+    dec+= np.random.randn()*jitter_deg
+    return ra,dec
 
 def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
-            dr='dr4',rerun='s21a_wide',filters='GRIZY',
+            dr='pdr3',rerun='pdr3_wide',filters='GRIZY',
             hsc_arcsec_per_pixel=0.168,photoz_tol=0.01,
             task_idx=0,seed=None,verbose=False):
     '''
@@ -155,27 +161,33 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
     object_id,ra,dec = zmatch.object_id.values[0],zmatch.ra.values[0],zmatch.dec.values[0]
     
     with tempfile.TemporaryDirectory() as tmp_dir:
+        os.chdir(tmp_dir)
+        print(tmp_dir)
     
         if verbose: 
             start = time.time()
             print(f'Getting 11x11 arcmin2 cutouts from HSC-SSP data archive server...')
         # get cutout 11x11 arcmin coadd cutout images at quasi-random location
-        hsc_image.get_cutouts(db_id,ra,dec,tmp_dir,dr=dr,rerun=rerun,filters=filters,fov_arcsec=660)
+        os.system(f'python {rsdir}/hsc_dat/{dr}/downloadCutout/downloadCutout.py --rerun={rerun} --ra={ra} --dec={dec} --sw=330.0asec --sh=330.0asec --image=true --mask=true --variance=true --type=coadd --name="{db_id}-Cutout-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+        # hsc_image.get_cutouts(db_id,ra,dec,tmp_dir,dr=dr,
+        #                       rerun=rerun,filters=filters,fov_arcsec=660)
         if verbose: print(f'Finished in {time.time()-start} seconds.')
-            
-        # some hacky code to deal with the filename conventions in bulk mode
-        cutout_names = list(sorted(glob(f'{tmp_dir}/*-cutout-HSC-?-*-{rerun}.fits')))
-        nfilters = len(filters)
-        task_start = task_idx*nfilters
-        task_end = task_start+nfilters
-        cutout_names = cutout_names[task_start:task_end]
 
-        # use i-band bit-mask for coordinate insertion, if available
-        filter_idxs = {filt:idx for idx,filt in enumerate(filters)}
+        cutout_names = [f"{db_id}-Cutout-HSC-{filt}.fits" for filt in filters]
+        # # some hacky code to deal with the filename conventions in bulk mode
+        # cutout_names = list(sorted(glob(f'{tmp_dir}/*-cutout-HSC-?-*-{rerun}.fits')))
+        # nfilters = len(filters)
+        # task_start = task_idx*nfilters
+        # task_end = task_start+nfilters
+        # cutout_names = cutout_names[task_start:task_end]
+
+        # # use i-band bit-mask for coordinate insertion, if available
+        # filter_idxs = {filt:idx for idx,filt in enumerate(filters)}
         if 'I' in filters:
-            cutout_name_mask = cutout_names[filter_idxs['I']]
+            cutout_name_mask = f"{db_id}-Cutout-HSC-I.fits"
         else:
             cutout_name_mask = cutout_names[0]
+            
         mask_keys=['MP_BAD', 'MP_CLIPPED', 'MP_CR', 'MP_CROSSTALK',
                    'MP_DETECTED', 'MP_DETECTED_NEGATIVE', 'MP_EDGE',
                    'MP_INEXACT_PSF', 'MP_INTRP', 'MP_NO_DATA', 'MP_REJECTED',
@@ -193,15 +205,20 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
         if verbose: 
             start = time.time()
             print(f'Getting PSF reconstructions from HSC-SSP data archive server...')
-        # get psf images for target ra,dec location
-        hsc_psf.get_psfs(db_id,ra,dec,tmp_dir,dr=dr,rerun=rerun,filters=filters)
-        if verbose: print(f'Finished in {time.time()-start} seconds.')
             
-        psf_names = list(sorted(glob(f'{tmp_dir}/*-psf-calexp-{rerun}-HSC-?-*.fits')))
-        psf_names = psf_names[task_start:task_end]
+        # get psf images for target ra,dec location
+        os.system(f'python {rsdir}/hsc_dat/{dr}/downloadPsf/downloadPsf.py --rerun={rerun} --ra={ra} --dec={dec} --centered=false --name="{db_id}-PSF-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+        psf_names = [f'{db_id}-PSF-HSC-{filt}.fits' for filt in filters]
+            
+        # get psfs with 3 arcsec offsets for morphological analyses
+        jra,jdec = psf_jitter(ra,dec)
+        os.system(f'python {rsdir}/hsc_dat/{dr}/downloadPsf/downloadPsf.py --rerun={rerun} --ra={ra} --dec={dec} --centered=false --name="{db_id}-JitterPSF-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+        jpsf_names = [f'{db_id}-JitterPSF-HSC-{filt}.fits' for filt in filters]
+        
+        if verbose: print(f'Finished in {time.time()-start} seconds.')
 
         hdu_list = fits.HDUList()
-        for i,(filt,psf_name,cutout_name) in enumerate(zip(filters,psf_names,cutout_names)):
+        for i,(filt,psf_name,jpsf_name,cutout_name) in enumerate(zip(filters, psf_names, jpsf_names, cutout_names)):
             if verbose: 
                 start = time.time()
                 print(f'Processing {filt}-band HDU...')
@@ -214,8 +231,13 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
             apmag = 22.5-2.5*np.log10(np.nansum(data_img)) # for header
             # rebin to hsc ccd scale
             if npixels < npixels_hsc:
-                interp = RectBivariateSpline(np.linspace(-1,1,npixels),np.linspace(-1,1,npixels),data_img,kx=1,ky=1)
-                data_img = interp(np.linspace(-1,1,npixels_hsc),np.linspace(-1,1,npixels_hsc))*(npixels/npixels_hsc)**2
+                interp = RectBivariateSpline(
+                    np.linspace(-1,1,npixels),
+                    np.linspace(-1,1,npixels),
+                    data_img,kx=1,ky=1)
+                data_img = interp(
+                    np.linspace(-1,1,npixels_hsc),
+                    np.linspace(-1,1,npixels_hsc))*(npixels/npixels_hsc)**2
             else:
                 data_img = rebin(data_img,(npixels_hsc,npixels_hsc))
 
@@ -248,10 +270,14 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
             hdr['APMAG'] = (apmag,f'Apparent {filt}-band AB magnitude')
             hdr['DR'] = (dr,'HSC-SSP Data Release')
             hdr['RERUN'] = (rerun,'HSC-SSP Rerun')
-            hdr['RA'] = (float(ra),'HSC-SSP insertion right ascension (centroid)')
-            hdr['DEC'] = (float(dec),'HSC-SSP insertion declination (centroid)')
-            hdr['BGMEAN'] = (cutout_hdr['BGMEAN'],'HSC-SSP background mean [original]')
-            hdr['BGVAR'] = (cutout_hdr['BGVAR'],'HSC-SSP background variance [original]')
+            hdr['RA'] = (float(ra),
+                         'HSC-SSP insertion right ascension (centroid)')
+            hdr['DEC'] = (float(dec),
+                          'HSC-SSP insertion declination (centroid)')
+            hdr['BGMEAN'] = (cutout_hdr['BGMEAN'],
+                             'HSC-SSP background mean [original]')
+            hdr['BGVAR'] = (cutout_hdr['BGVAR'],
+                            'HSC-SSP background variance [original]')
             hdr['VARSC'] = (cutout_hdr['variance_scale'],'HSC-SSP variance scale [original]')
             hdu.header = hdr
             hdu_list.append(hdu)
@@ -259,49 +285,67 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
             hdu_list.append(hdu)
             hdu = fits.ImageHDU(data_var,name=f'SUBARU_HSC.{filt} VARIANCE')
             hdu_list.append(hdu)
+            hdu_jpsf = fits.open(jpsf_name)[0]
+            hdu_jpsf.header['JRA']=(float(jra),'Jittered PSF RA')
+            hdu_jpsf.header['JDEC']=(float(jdec),'Jittered PSF DEC')
+            hdu_jpsf.name = f'SUBARU_HSC.{filt} PSF'
+            hdu_list.append(hdu_jpsf)
             if verbose: 
                 print(f'Finished in {time.time()-start} seconds.')
         
         if verbose: print(f'Writing results to {outname} ...')
         hdu_list.writeto(outname,overwrite=True)
         if verbose: print(f'Done.')
-            
+
 def main():
     
-    sim_tag = 'TNG50-1'
-    snap = int(os.getenv('SNAP'))
-    cams = ['v0','v1','v2','v3']
-    
-    project_path = '/lustre/work/connor.bottrell/Simulations/IllustrisTNG'
-    # base path where TNG data is stored
-    il_path = f'{project_path}/{sim_tag}/output'
-    # photometry path
-    img_path = f'{project_path}/{sim_tag}/postprocessing/SKIRT9/Photometry'
-    out_path = f'{project_path}/{sim_tag}/postprocessing/SKIRT9/HSC_SSP'
-    
-    subs,mstar = get_subhalos(il_path,snap,cosmology=cosmo,mstar_lower=9)
-  
+    sim_tag = os.getenv('SIM')
     njobs = int(os.getenv('JOB_ARRAY_NJOBS'))
     job_idx = int(os.getenv('JOB_ARRAY_INDEX'))
+    
+    snaps = [91,87,84,78,72,67,63,59]
+    cams = ['v0','v1','v2','v3']
+    dr = 'pdr3'
+    rerun = 'pdr3_wide'
+    
+    if 'pdr' in dr:
+        # export public dr keys for data server access
+        os.environ['HSC_SSP_CAS_PASSWORD'] = os.environ['SSP_PDR_PWD']
+        os.environ['HSC_SSP_CAS_USERNAME'] = os.environ['SSP_PDR_USR']
+    else:
+        # export internal dr keys for data server access
+        os.environ['HSC_SSP_CAS_PASSWORD'] = os.environ['SSP_IDR_PWD']
+        os.environ['HSC_SSP_CAS_USERNAME'] = os.environ['SSP_IDR_USR']
         
+    project_path = f'/vera/ptmp/gc/bconn/SKIRT/IllustrisTNG/{sim_tag}/HSCSSP'
+    # base path where TNG data is stored
+    il_path = f'/virgotng/universe/IllustrisTNG/{sim_tag}/output'
+    # photometry path
+    img_path = f'{project_path}/Idealized'
+    # output path
+    out_path = f'{project_path}/{rerun}'
+    
     csv_name = 'Catalogues/HSC-dr3-s20a_wide-photoz_mizuki-CLEAN.csv'
     csv_name = f'{rsdir}/{csv_name}'
     src_cat = hsc_sql.load_sql_df(csv_name)
+    print('Loaded source catalogue.')
     
-    for sub in subs[job_idx::njobs]:
-        for cam in cams:
-            print(f'Running HSC RealSim for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}...')
-            start = time.time()
-            try:
-                realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,verbose=True)
-            except:
-                print('Failed for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}.')
-                pass
-            print(f'Fulltime: {time.time()-start} seconds.\n')
+    for snap in snaps:
+        subs,mstar = get_subhalos(il_path,snap,cosmology=cosmo,
+                                  mstar_lower=10)
+        for sub in subs[job_idx::njobs]:
+            for cam in cams:
+                print(f'Running HSC RealSim for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}...')
+                start = time.time()
+                try:
+                    realsim(il_path,img_path,out_path,src_cat,
+                            sim_tag,snap,sub,cam,verbose=True,
+                            dr=dr,rerun=rerun)
+                except:
+                    print(f'Failed for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}.')
+                    pass
+                print(f'Fulltime: {time.time()-start} seconds.\n')
     
-    #snap,sub,cam = 78,636086,'v2'
-    #realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,verbose=True)
-
 if __name__=='__main__':
     
     main()
