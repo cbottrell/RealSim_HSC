@@ -168,7 +168,14 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
             start = time.time()
             print(f'Getting 11x11 arcmin2 cutouts from HSC-SSP data archive server...')
         # get cutout 11x11 arcmin coadd cutout images at quasi-random location
-        os.system(f'python {rsdir}/hsc_dat/{dr}/downloadCutout/downloadCutout.py --rerun={rerun} --ra={ra} --dec={dec} --sw=330.0asec --sh=330.0asec --image=true --mask=true --variance=true --type=coadd --name="{db_id}-Cutout-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+        while True:
+            try:
+                os.system(f'python {rsdir}/hsc_dat/{dr}/downloadCutout/downloadCutout.py --rerun={rerun} --ra={ra} --dec={dec} --sw=330.0asec --sh=330.0asec --image=true --mask=true --variance=true --type=coadd --name="{db_id}-Cutout-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+                break
+            except:
+                time.sleep(30)
+                pass
+
         # hsc_image.get_cutouts(db_id,ra,dec,tmp_dir,dr=dr,
         #                       rerun=rerun,filters=filters,fov_arcsec=660)
         if verbose: print(f'Finished in {time.time()-start} seconds.')
@@ -207,12 +214,22 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
             print(f'Getting PSF reconstructions from HSC-SSP data archive server...')
             
         # get psf images for target ra,dec location
-        os.system(f'python {rsdir}/hsc_dat/{dr}/downloadPsf/downloadPsf.py --rerun={rerun} --ra={ra} --dec={dec} --centered=false --name="{db_id}-PSF-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+        while True:
+            try:
+                os.system(f'python {rsdir}/hsc_dat/{dr}/downloadPsf/downloadPsf.py --rerun={rerun} --ra={ra} --dec={dec} --centered=false --name="{db_id}-PSF-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+                break
+            except:
+                pass
         psf_names = [f'{db_id}-PSF-HSC-{filt}.fits' for filt in filters]
             
         # get psfs with 3 arcsec offsets for morphological analyses
         jra,jdec = psf_jitter(ra,dec)
-        os.system(f'python {rsdir}/hsc_dat/{dr}/downloadPsf/downloadPsf.py --rerun={rerun} --ra={ra} --dec={dec} --centered=false --name="{db_id}-JitterPSF-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+        while True:
+            try:
+                os.system(f'python {rsdir}/hsc_dat/{dr}/downloadPsf/downloadPsf.py --rerun={rerun} --ra={ra} --dec={dec} --centered=false --name="{db_id}-JitterPSF-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
+                break
+            except:
+                pass
         jpsf_names = [f'{db_id}-JitterPSF-HSC-{filt}.fits' for filt in filters]
         
         if verbose: print(f'Finished in {time.time()-start} seconds.')
@@ -303,7 +320,8 @@ def main():
     njobs = int(os.getenv('JOB_ARRAY_NJOBS'))
     job_idx = int(os.getenv('JOB_ARRAY_INDEX'))
     
-    snaps = [91,87,84,78,72,67,63,59]
+    snap_min,snap_max = 72,91
+    snaps = np.arange(snap_min,snap_max)[::-1]
     cams = ['v0','v1','v2','v3']
     dr = 'pdr3'
     rerun = 'pdr3_wide'
