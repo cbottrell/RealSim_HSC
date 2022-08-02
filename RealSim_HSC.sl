@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4GB
-#SBATCH --array=0-299%8
+#SBATCH --array=0-299%100
 #SBATCH --partition=p.large
 #SBATCH --mail-type=END
 #SBATCH --error='/u/bconn/Scratch/%x-%A_%a.err' 

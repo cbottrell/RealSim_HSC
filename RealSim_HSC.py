@@ -37,7 +37,8 @@ def hsc_calibrate_msb(filename,pixelscale=0.168,extension=1):
     '''Calibrate HSC cutout image to magnitude surface brightness [AB mag/arcsec2].'''
     data = fits.getdata(filename,extension)
     hdr = fits.getheader(filename,0)
-    f0 = hdr['FLUXMAG0']
+    # f0 = hdr['FLUXMAG0']
+    f0 = 10**(0.4*27)
     data = -2.5*np.log10(data/f0/pixelscale**2) # mag/arscec2
     data[np.isnan(data)]=99
     return data   
@@ -46,7 +47,8 @@ def hsc_calibrate_nanomaggies(filename,pixelscale=0.168,extension=1):
     '''Calibrate HSC cutout image to linear AB nanomaggies.'''
     data = fits.getdata(filename,extension)
     hdr = fits.getheader(filename,0)
-    f0 = hdr['FLUXMAG0']
+    # f0 = hdr['FLUXMAG0']
+    f0 = 10**(0.4*27)
     data = data/f0*1e9 # nanomaggies
     return data   
 
@@ -54,7 +56,8 @@ def hsc_calibrate_variance_nanomaggies(filename,pixelscale=0.168,extension=3):
     '''Calibrate HSC variance image to squared AB nanomaggies.'''
     variance = fits.getdata(filename,extension)
     hdr = fits.getheader(filename,0)
-    f0 = hdr['FLUXMAG0']
+    # f0 = hdr['FLUXMAG0']
+    f0 = 10**(0.4*27)
     variance = variance*(1e9/f0)**2 # nanomaggies
     return variance   
 
@@ -158,47 +161,45 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
     zmatch_idxs = abs(src_cat['photoz_best']-redshift)<=photoz_tol
     sub_cat = src_cat.loc[zmatch_idxs]
     zmatch = sub_cat.sample(1,replace=False)
-    object_id,ra,dec = zmatch.object_id.values[0],zmatch.ra.values[0],zmatch.dec.values[0]
+    object_id = zmatch.object_id.values[0]
+    ra = zmatch.ra.values[0]
+    dec = zmatch.dec.values[0]
+    tract = zmatch.tract.values[0]
+    patch = f'{zmatch.patch.values[0]:03}'
+    # convert integer patch to hsc format
+    patch = f'{patch[0]},{patch[-1]}'
     
     with tempfile.TemporaryDirectory() as tmp_dir:
         os.chdir(tmp_dir)
-        print(tmp_dir)
-    
         if verbose: 
             start = time.time()
-            print(f'Getting 11x11 arcmin2 cutouts from HSC-SSP data archive server...')
-        # get cutout 11x11 arcmin coadd cutout images at quasi-random location
-        while True:
-            try:
-                os.system(f'python {rsdir}/hsc_dat/{dr}/downloadCutout/downloadCutout.py --rerun={rerun} --ra={ra} --dec={dec} --sw=330.0asec --sh=330.0asec --image=true --mask=true --variance=true --type=coadd --name="{db_id}-Cutout-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
-                break
-            except:
-                time.sleep(30)
-                pass
+            print(f'Getting full-patch cutouts from data archive server...')
+            
+        for filt in filters:
+            while True:
+                if os.system(f'wget -O {db_id}-Cutout-HSC-{filt}.fits --user {os.environ["HSC_SSP_CAS_USERNAME"]} --password {os.environ["HSC_SSP_CAS_PASSWORD"]} https://hsc-release.mtk.nao.ac.jp/archive/filetree/{rerun}/deepCoadd-results/HSC-{filt}/{tract}/{patch}/calexp-HSC-{filt}-{tract}-{patch}.fits')==0:
+                    break
+                else:
+                    time.sleep(120)
+                    continue
 
-        # hsc_image.get_cutouts(db_id,ra,dec,tmp_dir,dr=dr,
-        #                       rerun=rerun,filters=filters,fov_arcsec=660)
-        if verbose: print(f'Finished in {time.time()-start} seconds.')
+        if verbose: 
+            print(f'Finished in {time.time()-start} seconds.')
 
         cutout_names = [f"{db_id}-Cutout-HSC-{filt}.fits" for filt in filters]
-        # # some hacky code to deal with the filename conventions in bulk mode
-        # cutout_names = list(sorted(glob(f'{tmp_dir}/*-cutout-HSC-?-*-{rerun}.fits')))
-        # nfilters = len(filters)
-        # task_start = task_idx*nfilters
-        # task_end = task_start+nfilters
-        # cutout_names = cutout_names[task_start:task_end]
 
         # # use i-band bit-mask for coordinate insertion, if available
-        # filter_idxs = {filt:idx for idx,filt in enumerate(filters)}
         if 'I' in filters:
             cutout_name_mask = f"{db_id}-Cutout-HSC-I.fits"
         else:
             cutout_name_mask = cutout_names[0]
             
-        mask_keys=['MP_BAD', 'MP_CLIPPED', 'MP_CR', 'MP_CROSSTALK',
+        mask_keys=['MP_BAD', 'MP_BRIGHT_OBJECT',
+                   'MP_CLIPPED', 'MP_CR', 'MP_CROSSTALK',
                    'MP_DETECTED', 'MP_DETECTED_NEGATIVE', 'MP_EDGE',
                    'MP_INEXACT_PSF', 'MP_INTRP', 'MP_NO_DATA', 'MP_REJECTED',
                    'MP_SAT', 'MP_SENSOR_EDGE', 'MP_SUSPECT', 'MP_UNMASKEDNAN']
+        
         mask = coord_mask(cutout_name_mask,keys=mask_keys)
         row,col = get_insertion_coords(mask,npixels_hsc)
         row_min = int(row-npixels_hsc/2)
@@ -219,6 +220,7 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
                 os.system(f'python {rsdir}/hsc_dat/{dr}/downloadPsf/downloadPsf.py --rerun={rerun} --ra={ra} --dec={dec} --centered=false --name="{db_id}-PSF-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
                 break
             except:
+                time.sleep(10)
                 pass
         psf_names = [f'{db_id}-PSF-HSC-{filt}.fits' for filt in filters]
             
@@ -229,6 +231,7 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
                 os.system(f'python {rsdir}/hsc_dat/{dr}/downloadPsf/downloadPsf.py --rerun={rerun} --ra={ra} --dec={dec} --centered=false --name="{db_id}-JitterPSF-{{filter}}" --user={os.environ["HSC_SSP_CAS_USERNAME"]}')
                 break
             except:
+                time.sleep(10)
                 pass
         jpsf_names = [f'{db_id}-JitterPSF-HSC-{filt}.fits' for filt in filters]
         
@@ -361,7 +364,7 @@ def main():
                             dr=dr,rerun=rerun)
                 except:
                     print(f'Failed for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}.')
-                    pass
+
                 print(f'Fulltime: {time.time()-start} seconds.\n')
     
 if __name__=='__main__':
