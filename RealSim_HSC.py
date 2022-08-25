@@ -324,7 +324,7 @@ def main():
     job_idx = int(os.getenv('JOB_ARRAY_INDEX'))
     
     snap_min,snap_max = 72,91
-    snaps = np.arange(snap_min,snap_max)[::-1]
+    snaps = np.arange(snap_min,snap_max+1)[::-1]
     cams = ['v0','v1','v2','v3']
     dr = 'pdr3'
     rerun = 'pdr3_wide'
