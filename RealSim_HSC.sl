@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4GB
-#SBATCH --array=0-299%100
+#SBATCH --array=0-299%16
 #SBATCH --partition=p.large
 #SBATCH --mail-type=END
 #SBATCH --error='/u/bconn/Scratch/%x-%A_%a.err' 
@@ -17,7 +17,7 @@ conda activate tf39_cpu
 
 export JOB_ARRAY_NJOBS=300
 export JOB_ARRAY_INDEX=$SLURM_ARRAY_TASK_ID
-export SIM='TNG100-1'
+export SIM='TNG50-1'
 
 cd /u/bconn/Projects/Simulations/IllustrisTNG/Scripts/RealSim_HSC
 python RealSim_HSC.py

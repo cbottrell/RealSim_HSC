@@ -177,10 +177,10 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
             
         for filt in filters:
             while True:
-                if os.system(f'wget -O {db_id}-Cutout-HSC-{filt}.fits --user {os.environ["HSC_SSP_CAS_USERNAME"]} --password {os.environ["HSC_SSP_CAS_PASSWORD"]} https://hsc-release.mtk.nao.ac.jp/archive/filetree/{rerun}/deepCoadd-results/HSC-{filt}/{tract}/{patch}/calexp-HSC-{filt}-{tract}-{patch}.fits')==0:
+                if os.system(f'wget -O {db_id}-Cutout-HSC-{filt}.fits --user {os.environ["HSC_SSP_CAS_USERNAME"]} --password {os.environ["HSC_SSP_CAS_PASSWORD"]} --no-verbose https://hsc-release.mtk.nao.ac.jp/archive/filetree/{rerun}/deepCoadd-results/HSC-{filt}/{tract}/{patch}/calexp-HSC-{filt}-{tract}-{patch}.fits')==0:
                     break
                 else:
-                    time.sleep(120)
+                    time.sleep(10)
                     continue
 
         if verbose: 
@@ -353,7 +353,7 @@ def main():
     
     for snap in snaps:
         subs,mstar = get_subhalos(il_path,snap,cosmology=cosmo,
-                                  mstar_lower=10)
+                                  mstar_lower=9)
         for sub in subs[job_idx::njobs]:
             for cam in cams:
                 print(f'Running HSC RealSim for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}...')
