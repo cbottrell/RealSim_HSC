@@ -2,9 +2,9 @@
 #PBS -N RealSim_HSC
 #PBS -o /home/connor.bottrell/Scratch/pbs
 #PBS -e /home/connor.bottrell/Scratch/pbs
-#PBS -l select=1:ncpus=1:mem=16gb
+#PBS -l select=1:ncpus=1:mem=5gb
 #PBS -l walltime=96:00:00
-#PBS -J 0-4:1
+#PBS -J 0-49:1
 #PBS -u bottrell
 #PBS -M connor.bottrell@ipmu.jp
 #PBS -m ae
@@ -13,11 +13,11 @@
 
 source ~/.bash_profile
 conda activate tf39_cpu
-cd /lustre/work/connor.bottrell/RealSim_HSC
 
 export TMPDIR=/lustre/work/connor.bottrell/RealSim_HSC/tmp
-export JOB_ARRAY_NJOBS=5
+export JOB_ARRAY_NJOBS=50
 export JOB_ARRAY_INDEX=$PBS_ARRAY_INDEX
-export SNAP=59
+export SIM='TNG50-1'
 
+cd /lustre/work/connor.bottrell/RealSim_HSC
 python RealSim_HSC.py
