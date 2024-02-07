@@ -1,10 +1,10 @@
 #!/bin/bash -l 
 #SBATCH --job-name=realsim
-#SBATCH --time=24:00:00
+#SBATCH --time=48:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --mem=4GB
-#SBATCH --array=0-299%16
+#SBATCH --array=0-299%8
 #SBATCH --partition=p.large
 #SBATCH --mail-type=END
 #SBATCH --error='/u/bconn/Scratch/%x-%A_%a.err' 

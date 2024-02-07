@@ -180,7 +180,7 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
                 if os.system(f'wget -O {db_id}-Cutout-HSC-{filt}.fits --user {os.environ["HSC_SSP_CAS_USERNAME"]} --password {os.environ["HSC_SSP_CAS_PASSWORD"]} --no-verbose https://hsc-release.mtk.nao.ac.jp/archive/filetree/{rerun}/deepCoadd-results/HSC-{filt}/{tract}/{patch}/calexp-HSC-{filt}-{tract}-{patch}.fits')==0:
                     break
                 else:
-                    time.sleep(10)
+                    time.sleep(120)
                     continue
 
         if verbose: 
@@ -319,13 +319,16 @@ def realsim(il_path,img_path,out_path,src_cat,sim_tag,snap,sub,cam,
 
 def main():
     
-    sim_tag = os.getenv('SIM')
-    njobs = int(os.getenv('JOB_ARRAY_NJOBS'))
-    job_idx = int(os.getenv('JOB_ARRAY_INDEX'))
+    sim_tag = 'TNG100-1'
     
-    snap_min,snap_max = 72,91
-    snaps = np.arange(snap_min,snap_max+1)[::-1]
-    cams = ['v0','v1','v2','v3']
+    # sim_tag = os.getenv('SIM')
+    # njobs = int(os.getenv('JOB_ARRAY_NJOBS'))
+    # job_idx = int(os.getenv('JOB_ARRAY_INDEX'))
+    
+    # snap_min,snap_max = 72,91
+    # snaps = np.arange(snap_min,snap_max+1)[::-1]
+
+    # cams = ['v0','v1','v2','v3']
     dr = 'pdr3'
     rerun = 'pdr3_wide'
     
@@ -351,21 +354,29 @@ def main():
     src_cat = hsc_sql.load_sql_df(csv_name)
     print('Loaded source catalogue.')
     
-    for snap in snaps:
-        subs,mstar = get_subhalos(il_path,snap,cosmology=cosmo,
-                                  mstar_lower=9)
-        for sub in subs[job_idx::njobs]:
-            for cam in cams:
-                print(f'Running HSC RealSim for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}...')
-                start = time.time()
-                try:
-                    realsim(il_path,img_path,out_path,src_cat,
-                            sim_tag,snap,sub,cam,verbose=True,
-                            dr=dr,rerun=rerun)
-                except:
-                    print(f'Failed for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}.')
+#     for snap in snaps:
+#         subs,mstar = get_subhalos(il_path,snap,cosmology=cosmo,
+#                                   mstar_lower=10)
+#         for sub in subs[job_idx::njobs]:
+#             for cam in cams:
+#                 print(f'Running HSC RealSim for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}...')
+#                 start = time.time()
+#                 try:
+#                     realsim(il_path,img_path,out_path,src_cat,
+#                             sim_tag,snap,sub,cam,verbose=True,
+#                             dr=dr,rerun=rerun)
+#                 except:
+#                     print(f'Failed for SIMTAG:{sim_tag}, SNAP:{snap}, SUB:{sub}, CAM:{cam}.')
 
-                print(f'Fulltime: {time.time()-start} seconds.\n')
+#                 print(f'Fulltime: {time.time()-start} seconds.\n')
+
+    snap = 74
+    sub = 191170
+    cam = 'v0'
+    
+    realsim(il_path,img_path,out_path,src_cat,
+            sim_tag,snap,sub,cam,verbose=True,
+            dr=dr,rerun=rerun)
     
 if __name__=='__main__':
     
